@@ -1,0 +1,94 @@
+# Упрощённая облачная сборка TeamPaster (форк Hiddify).
+# Запускается вручную: вкладка Actions -> "TeamPaster build" -> Run workflow.
+# Не требует секретов подписи: APK подписывается отладочным ключом
+# (так задумано в android/app/build.gradle, когда нет key.properties).
+#
+# Основано на Hiddify (https://github.com/hiddify/hiddify-app),
+# лицензия Hiddify Extended GPL v3.
+
+name: TeamPaster build
+
+on:
+  workflow_dispatch:
+
+env:
+  IS_GITHUB_ACTIONS: "1"
+  CHANNEL: dev
+  FLUTTER_VERSION: "3.38.5"
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: make android-apk-install-deps
+
+      - name: Add pub cache to PATH
+        run: echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare
+        run: make android-apk-prepare
+
+      - name: Build APK
+        run: make android-apk-release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TeamPaster-Android
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: make windows-install-deps
+
+      - name: Prepare
+        run: make windows-prepare
+
+      - name: Build portable zip
+        run: make windows-zip-release
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: TeamPaster-Windows
+          path: dist/**
+          if-no-files-found: error
